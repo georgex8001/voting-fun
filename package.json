@@ -1,0 +1,43 @@
+{
+  "name": "voting-fun",
+  "version": "1.0.0",
+  "description": "基于 Zama FHEVM 技术的保密投票系统",
+  "main": "index.js",
+  "scripts": {
+    "setup": "node scripts/setup-from-mnemonic.js",
+    "compile": "hardhat compile",
+    "deploy:sepolia": "hardhat run scripts/deploy.js --network sepolia",
+    "deploy:coprocessor": "hardhat run scripts/deploy_sepolia_coprocessor.js --network sepolia",
+    "deploy:local": "hardhat run scripts/deploy.js --network localhost",
+    "create:poll": "hardhat run scripts/create_poll_with_fhe.js --network sepolia",
+    "vote": "hardhat run scripts/vote_encrypted.js --network sepolia",
+    "test:full": "node scripts/full_test_flow.js",
+    "test": "hardhat test",
+    "node": "hardhat node",
+    "fhevm:start": "docker run -d -p 8545:8545 --name fhevm-node ghcr.io/zama-ai/evmos-node:v0.2.0",
+    "fhevm:stop": "docker stop fhevm-node && docker rm fhevm-node",
+    "quick-start": "npm install && npm run compile && npm run deploy:sepolia"
+  },
+  "keywords": [
+    "fhe",
+    "fhevm",
+    "zama",
+    "voting",
+    "privacy",
+    "blockchain",
+    "ethereum"
+  ],
+  "author": "Voting-Fun Team",
+  "license": "MIT",
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "hardhat": "^2.19.0"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.1",
+    "@zama-fhe/relayer-sdk": "^0.2.0",
+    "dotenv": "^16.3.1",
+    "fhevm": "^0.5.0",
+    "fhevmjs": "^0.5.0"
+  }
+}
