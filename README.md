@@ -221,7 +221,6 @@ MIT License - see [LICENSE](./LICENSE) file for details.
 
 **georgex8001**
 
-Developed with assistance from AI for learning and demonstration purposes.
 
 ## 🙏 Acknowledgments
 
@@ -406,8 +405,6 @@ MIT License - 详见 [LICENSE](./LICENSE) 文件
 ## 👨‍💻 作者
 
 **georgex8001**
-
-在 AI 助手的帮助下开发，用于学习和演示目的。
 
 ## 🙏 致谢
 
