@@ -1,3 +1,5 @@
+<img width="2560" height="1279" alt="image" src="https://github.com/user-attachments/assets/54b75568-2d43-4ab9-9eec-c5376ec1778e" />
+
 # 🗳️ Voting-Fun - Confidential Voting System
 
 A fully confidential on-chain voting dApp powered by Zama FHEVM technology.
