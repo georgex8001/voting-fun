@@ -45,6 +45,10 @@ function CreatePoll({ onSuccess }) {
       setLoading(true)
       await createPoll(title, validOptions, duration)
       
+      // 等待区块确认
+      console.log('✅ Poll created, waiting for confirmation...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
+      
       // 重置表单
       setTitle('')
       setOptions(['', ''])

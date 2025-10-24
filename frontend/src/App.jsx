@@ -14,6 +14,7 @@ function App() {
   const { account, chainId, connectWallet, disconnectWallet, isCorrectNetwork } = useWallet()
   const [currentView, setCurrentView] = useState('list') // 'list', 'create', 'detail'
   const [selectedPollId, setSelectedPollId] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0) // 用于触发列表刷新
 
   // 监听 FHE Gateway 状态变化并显示通知
   useFheStatusNotifications()
@@ -36,6 +37,8 @@ function App() {
 
   const handleCreateSuccess = () => {
     setCurrentView('list')
+    // 触发列表刷新
+    setRefreshKey(prev => prev + 1)
   }
 
   return (
@@ -123,7 +126,7 @@ function App() {
             {/* Content Area */}
             <div className="animate-fade-in">
               {currentView === 'list' && (
-                <PollList onViewPoll={handleViewPoll} />
+                <PollList key={refreshKey} onViewPoll={handleViewPoll} />
               )}
               {currentView === 'create' && (
                 <CreatePoll onSuccess={handleCreateSuccess} />
