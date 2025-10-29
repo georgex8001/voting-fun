@@ -116,10 +116,10 @@ export function getFheStatus() {
 
 // 合约地址配置
 const CONTRACT_ADDRESSES = {
-  // FHE 加密合约（Gateway 在线时使用）- 升级后的新版本
-  fhe: "0xC6bb1eb417b4C0AC5D7E411d6b801608b1064811",  // ✅ 已更新（2025-10-29）
-  // Fallback 模式也使用新合约（Gateway 离线时使用同一个合约）
-  fallback: "0xC6bb1eb417b4C0AC5D7E411d6b801608b1064811"  // ✅ 已更新（2025-10-29）
+  // FHE 加密合约（Gateway 在线时使用）- 升级后的新版本 ✅
+  fhe: "0xC6bb1eb417b4C0AC5D7E411d6b801608b1064811",  // 生产级解密系统（2025-10-29）
+  // Fallback 简化合约（Gateway 离线时自动切换）
+  fallback: "0x1032d41F45c22b7dA427f234A0F418c02DA0f3A0"  // SimpleVotingTest（明文投票）
 };
 
 // 🧱 获取合约实例（根据 FHE 状态自动切换）
