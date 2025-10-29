@@ -1,44 +1,70 @@
 import { useState, useEffect } from 'react'
 import { useContract } from '../hooks/useContract'
+import { onFheStatusChange, getFheStatus } from '../hooks/useContract'
 import { Clock, Users, CheckCircle2, XCircle } from 'lucide-react'
 
 function PollList({ onViewPoll }) {
   const { getAllPollIds, getPollInfo } = useContract()
   const [polls, setPolls] = useState([])
   const [loading, setLoading] = useState(true)
+  const [fheStatus, setFheStatus] = useState(getFheStatus()) // 获取初始状态
 
+  // 监听 Gateway 状态变化，自动切换合约并重新加载
   useEffect(() => {
-    loadPolls()
+    console.log('🔄 PollList mounted, subscribing to FHE status changes...')
+    const unsubscribe = onFheStatusChange((status) => {
+      console.log(`📡 Gateway status changed: ${status}`)
+      setFheStatus(status)
+      // 状态改变时自动重新加载投票（切换到新合约）
+      if (status !== 'unknown') {
+        loadPolls()
+      }
+    })
+    return unsubscribe
   }, [])
+
+  // 初始加载
+  useEffect(() => {
+    console.log('🔄 PollList initial load...')
+    loadPolls()
+  }, []) // Component will remount when key changes
 
   const loadPolls = async () => {
     try {
       setLoading(true)
       
-      // Wait a bit to ensure blocks are confirmed
-      await new Promise(resolve => setTimeout(resolve, 1000))
+      // Wait longer to ensure blocks are confirmed
+      console.log('⏳ Waiting for blockchain state update (2 seconds)...')
+      await new Promise(resolve => setTimeout(resolve, 2000))
       
+      console.log('📡 Fetching poll IDs...')
       const ids = await getAllPollIds()
+      console.log(`📊 Found ${ids.length} polls:`, ids)
       
       if (ids.length === 0) {
         setPolls([])
         return
       }
       
+      console.log('📥 Fetching detailed information for all polls...')
       const pollsData = await Promise.all(
         ids.map(async (id) => {
           try {
-            return await getPollInfo(id)
+            const pollInfo = await getPollInfo(id)
+            console.log(`  ✓ Poll ${id}: "${pollInfo.title}"`)
+            return pollInfo
           } catch (error) {
-            console.error(`Failed to fetch poll ${id}:`, error)
+            console.error(`  ✗ Failed to fetch poll ${id}:`, error.message)
             return null
           }
         })
       )
 
-      setPolls(pollsData.filter(p => p !== null).reverse()) // Latest first
+      const validPolls = pollsData.filter(p => p !== null).reverse() // Latest first
+      console.log(`✅ Successfully loaded ${validPolls.length} polls`)
+      setPolls(validPolls)
     } catch (error) {
-      console.error('Failed to load poll list:', error)
+      console.error('❌ Failed to load poll list:', error)
     } finally {
       setLoading(false)
     }
@@ -91,9 +117,29 @@ function PollList({ onViewPoll }) {
 
   return (
     <div className="max-w-4xl mx-auto">
-      <h2 className="text-2xl font-bold text-white mb-6">
-        All Polls ({polls.length})
-      </h2>
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-white">
+            All Polls ({polls.length})
+          </h2>
+          {fheStatus !== 'unknown' && (
+            <p className="text-sm text-white/70 mt-1">
+              {fheStatus === 'up' 
+                ? '🔐 Connected to FHE Contract (Encrypted)' 
+                : '⚠️ Connected to Fallback Contract (Gateway Offline)'}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={() => {
+            console.log('🔄 Manual refresh triggered')
+            loadPolls()
+          }}
+          className="px-4 py-2 bg-white/20 hover:bg-white/30 text-white rounded-lg font-semibold transition-all"
+        >
+          🔄 Refresh
+        </button>
+      </div>
 
       <div className="grid gap-6">
         {polls.map((poll) => (
