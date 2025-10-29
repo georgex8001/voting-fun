@@ -48,4 +48,21 @@ coverage/
 # Netlify
 .netlify/
 
+# 临时开发文档（不上传到 GitHub）
+*_GUIDE.md
+*_SUMMARY.md
+*_COMPLETED.md
+*_COMPARISON.md
+*_SOLUTION.md
+*_EXPLAINED.md
+CURRENT_*.md
+TESTING_*.md
+GATEWAY_*.md
+DEPLOYMENT_SUCCESS.md
+ENV_SETUP_GUIDE.md
+UPDATE_*.md
+NEXT_*.md
+PROJECT_UPGRADE_*.md
+UPGRADE_*.md
+
 

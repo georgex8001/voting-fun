@@ -1,11 +1,24 @@
 import { useState, useEffect } from 'react'
-import { useContract, getFheStatus } from '../hooks/useContract'
+import { useContract, getFheStatus, getContract } from '../hooks/useContract'
 import { useWallet } from '../hooks/useWallet'
+import { useDecryption } from '../hooks/useDecryption'
+import DecryptionProgress from './DecryptionProgress'
 import { ArrowLeft, Clock, User, CheckCircle2, Lock } from 'lucide-react'
 
 function PollDetail({ pollId, onBack }) {
   const { account } = useWallet()
-  const { getPollInfo, getResults, hasVoted, vote, endPoll, requestDecryption } = useContract()
+  const { getPollInfo, getResults, hasVoted, vote, endPoll } = useContract()
+  const [contract, setContract] = useState(null)
+  
+  // ✅ 新增：使用解密 Hook
+  const {
+    requestDecryption,
+    status: decryptStatus,
+    progress: decryptProgress,
+    error: decryptError,
+    result: decryptResult,
+    reset: resetDecryption
+  } = useDecryption(contract)
   
   const [poll, setPoll] = useState(null)
   const [results, setResults] = useState([])
@@ -13,10 +26,27 @@ function PollDetail({ pollId, onBack }) {
   const [userHasVoted, setUserHasVoted] = useState(false)
   const [loading, setLoading] = useState(true)
   const [actionLoading, setActionLoading] = useState(false)
+  const [showDecryptionModal, setShowDecryptionModal] = useState(false)
 
   useEffect(() => {
-    loadPollData()
-  }, [pollId, account])
+    initContract()
+  }, [])
+  
+  useEffect(() => {
+    if (contract) {
+      loadPollData()
+    }
+  }, [pollId, account, contract])
+  
+  // ✅ 新增：初始化合约实例
+  const initContract = async () => {
+    try {
+      const contractInstance = await getContract()
+      setContract(contractInstance)
+    } catch (error) {
+      console.error('Failed to initialize contract:', error)
+    }
+  }
 
   const loadPollData = async () => {
     try {
@@ -69,16 +99,33 @@ function PollDetail({ pollId, onBack }) {
     }
   }
 
+  // ✅ 重写：使用新的解密流程
   const handleRequestDecryption = async () => {
+    if (!contract) {
+      alert('合约未初始化，请刷新页面')
+      return
+    }
+    
     try {
-      setActionLoading(true)
-      await requestDecryption(pollId)
-      // 等待一段时间后刷新
-      setTimeout(() => loadPollData(), 5000)
+      setShowDecryptionModal(true)
+      resetDecryption()
+      
+      console.log('🎮 开始完整解密流程...')
+      const result = await requestDecryption(pollId)
+      
+      console.log('✅ 解密完成:', result)
+      
+      // 刷新投票信息
+      await loadPollData()
+      
+      // 3秒后自动关闭模态框
+      setTimeout(() => {
+        setShowDecryptionModal(false)
+      }, 3000)
+      
     } catch (error) {
-      console.error(error)
-    } finally {
-      setActionLoading(false)
+      console.error('❌ 解密失败:', error)
+      // 保持模态框打开以显示错误
     }
   }
 
@@ -325,6 +372,58 @@ function PollDetail({ pollId, onBack }) {
           </div>
         )}
       </div>
+      
+      {/* ✅ 新增：解密进度模态框 */}
+      {showDecryptionModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl">
+            <DecryptionProgress 
+              status={decryptStatus}
+              progress={decryptProgress}
+              error={decryptError}
+            />
+            
+            {/* 失败时的操作按钮 */}
+            {decryptStatus === 'failed' && (
+              <div className="mt-4 space-y-2">
+                <button
+                  onClick={handleRequestDecryption}
+                  className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition font-semibold"
+                >
+                  🔄 重试
+                </button>
+                <button
+                  onClick={() => setShowDecryptionModal(false)}
+                  className="w-full bg-gray-300 text-gray-700 py-2 px-4 rounded-lg hover:bg-gray-400 transition font-semibold"
+                >
+                  关闭
+                </button>
+              </div>
+            )}
+            
+            {/* 成功时的操作按钮 */}
+            {decryptStatus === 'success' && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowDecryptionModal(false)}
+                  className="w-full bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition font-semibold"
+                >
+                  ✅ 查看结果
+                </button>
+              </div>
+            )}
+            
+            {/* 进行中时不允许关闭 */}
+            {decryptStatus !== 'success' && decryptStatus !== 'failed' && (
+              <div className="mt-4 text-center">
+                <p className="text-xs text-gray-500">
+                  ⚠️ 解密进行中，请不要关闭此窗口
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -16,6 +16,14 @@ contract SecretVoting is GatewayCaller {
         Ended      // 已结束
     }
 
+    // ✅ 新增：解密请求追踪结构
+    struct DecryptionRequest {
+        uint256 pollId;        // 关联的投票ID
+        address requester;     // 请求者地址
+        uint256 timestamp;     // 请求时间
+        bool processed;        // 是否已处理
+    }
+
     // 投票结构体
     struct Poll {
         uint256 id;                    // 投票ID
@@ -30,9 +38,17 @@ contract SecretVoting is GatewayCaller {
         bool resultsDecrypted;        // 是否已解密
     }
 
+    // 配置常量
+    uint256 public constant CALLBACK_GAS_LIMIT = 500000;  // Gateway 回调 Gas 限制
+    uint256 public constant DECRYPTION_TIMEOUT = 1800;    // 解密超时时间（30分钟）
+    
     // 状态变量
     uint256 public pollCount;
     mapping(uint256 => Poll) public polls;
+    
+    // ✅ 新增：解密请求追踪映射
+    mapping(uint256 => DecryptionRequest) public decryptionRequests;  // requestId => 请求信息
+    mapping(uint256 => uint256) public pollToRequestId;               // pollId => requestId
     
     // 事件
     event PollCreated(
@@ -54,6 +70,13 @@ contract SecretVoting is GatewayCaller {
     event ResultsDecrypted(
         uint256 indexed pollId,
         uint32[] results
+    );
+    
+    // ✅ 新增：解密请求事件
+    event DecryptionRequested(
+        uint256 indexed requestId,
+        uint256 indexed pollId,
+        uint256 timestamp
     );
 
     /**
@@ -153,8 +176,9 @@ contract SecretVoting is GatewayCaller {
     /**
      * @notice 请求解密投票结果
      * @param _pollId 投票ID
+     * @return requestId 解密请求ID
      */
-    function requestDecryption(uint256 _pollId) external {
+    function requestDecryption(uint256 _pollId) external returns (uint256 requestId) {
         Poll storage poll = polls[_pollId];
         
         require(poll.id != 0, "Poll does not exist");
@@ -168,37 +192,63 @@ contract SecretVoting is GatewayCaller {
         }
 
         // 发送解密请求到 Gateway
-        Gateway.requestDecryption(
+        requestId = Gateway.requestDecryption(
             cts,
             this.callbackDecryption.selector,
-            0,
-            block.timestamp + 100,
+            CALLBACK_GAS_LIMIT,          // ✅ 修复：使用足够的 Gas
+            block.timestamp + DECRYPTION_TIMEOUT,  // ✅ 修复：30分钟超时
             false
         );
+        
+        // ✅ 新增：记录解密请求映射
+        decryptionRequests[requestId] = DecryptionRequest({
+            pollId: _pollId,
+            requester: msg.sender,
+            timestamp: block.timestamp,
+            processed: false
+        });
+        
+        pollToRequestId[_pollId] = requestId;
+        
+        emit DecryptionRequested(requestId, _pollId, block.timestamp);
     }
 
     /**
      * @notice Gateway 回调函数，接收解密结果
+     * @param requestId 解密请求ID
      * @param decryptedInput 解密后的投票计数
      */
     function callbackDecryption(
-        uint256 /*requestId*/,
+        uint256 requestId,
         uint256[] memory decryptedInput
     ) public onlyGateway {
-        // 注意：这个回调需要额外的逻辑来确定是哪个投票的结果
-        // 在生产环境中，应该使用 requestId 映射来追踪
+        // ✅ 修复：使用 requestId 映射来追踪投票
+        DecryptionRequest storage request = decryptionRequests[requestId];
         
-        // 简化版本：假设最后一个活跃的投票
-        Poll storage poll = polls[pollCount];
+        // 验证请求有效性
+        require(request.timestamp > 0, "Invalid request ID");
+        require(!request.processed, "Request already processed");
+        require(
+            block.timestamp <= request.timestamp + DECRYPTION_TIMEOUT,
+            "Request expired"
+        );
         
-        if (!poll.resultsDecrypted && poll.status == PollStatus.Ended) {
-            for (uint256 i = 0; i < decryptedInput.length && i < poll.results.length; i++) {
-                poll.results[i] = uint32(decryptedInput[i]);
-            }
-            poll.resultsDecrypted = true;
-
-            emit ResultsDecrypted(poll.id, poll.results);
+        uint256 pollId = request.pollId;
+        Poll storage poll = polls[pollId];
+        
+        // 验证投票状态
+        require(poll.status == PollStatus.Ended, "Poll must be ended");
+        require(!poll.resultsDecrypted, "Results already decrypted");
+        
+        // 更新解密结果
+        for (uint256 i = 0; i < decryptedInput.length && i < poll.results.length; i++) {
+            poll.results[i] = uint32(decryptedInput[i]);
         }
+        
+        poll.resultsDecrypted = true;
+        request.processed = true;  // 标记请求已处理
+
+        emit ResultsDecrypted(poll.id, poll.results);
     }
 
     /**

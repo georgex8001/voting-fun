@@ -116,10 +116,10 @@ export function getFheStatus() {
 
 // 合约地址配置
 const CONTRACT_ADDRESSES = {
-  // FHE 加密合约（Gateway 在线时使用）
-  fhe: "0x6e34D1C8B45D54585b42DcB700DebA775715CDe6",
-  // 简化测试合约（Fallback 模式使用）
-  fallback: "0x1032d41F45c22b7dA427f234A0F418c02DA0f3A0"
+  // FHE 加密合约（Gateway 在线时使用）- 升级后的新版本
+  fhe: "0xC6bb1eb417b4C0AC5D7E411d6b801608b1064811",  // ✅ 已更新（2025-10-29）
+  // Fallback 模式也使用新合约（Gateway 离线时使用同一个合约）
+  fallback: "0xC6bb1eb417b4C0AC5D7E411d6b801608b1064811"  // ✅ 已更新（2025-10-29）
 };
 
 // 🧱 获取合约实例（根据 FHE 状态自动切换）
@@ -305,7 +305,11 @@ export function useContract() {
     getPollInfo: getPoll,
     getAllPollIds: async () => {
       const count = await getPollCount();
-      return Array.from({ length: count }, (_, i) => i);
+      console.log(`🔢 Contract pollCount: ${count}`);
+      // 修复：合约中pollId从1开始，不是0！
+      const ids = Array.from({ length: count }, (_, i) => i + 1);
+      console.log(`📋 Generated poll IDs:`, ids);
+      return ids;
     },
     getResults: async (pollId) => {
       const contract = await getContract();
