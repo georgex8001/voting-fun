@@ -267,3 +267,6 @@ const hasVoted = await contract.hasVoted(pollId, account);
 
 **保存此文件，下次项目快速查阅！** 🚀
 
+
+
+

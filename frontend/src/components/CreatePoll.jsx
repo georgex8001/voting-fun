@@ -43,11 +43,16 @@ function CreatePoll({ onSuccess }) {
 
     try {
       setLoading(true)
-      await createPoll(title, validOptions, duration)
+      const receipt = await createPoll(title, validOptions, duration)
       
-      // 等待区块确认
-      console.log('✅ Poll created, waiting for confirmation...')
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      // 等待区块确认（Fallback模式需要更长时间）
+      console.log('✅ Poll created successfully!')
+      console.log('⏳ Waiting for blockchain confirmation (5 seconds)...')
+      
+      // 增加等待时间到5秒，确保区块完全确认
+      await new Promise(resolve => setTimeout(resolve, 5000))
+      
+      console.log('🔄 Triggering poll list refresh...')
       
       // 重置表单
       setTitle('')
@@ -58,7 +63,8 @@ function CreatePoll({ onSuccess }) {
         onSuccess()
       }
     } catch (error) {
-      console.error(error)
+      console.error('❌ Create poll error:', error)
+      alert('Failed to create poll. Please try again.')
     } finally {
       setLoading(false)
     }

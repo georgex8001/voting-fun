@@ -10,17 +10,21 @@ import "fhevm/gateway/GatewayCaller.sol";
  * @dev 使用全同态加密技术保护投票隐私
  */
 contract SecretVoting is GatewayCaller {
-    // 投票状态枚举
+    // ✅ 完整的状态枚举（符合手册标准）
     enum PollStatus {
-        Active,    // 进行中
-        Ended      // 已结束
+        Active,           // 进行中
+        Ended,            // 已结束（等待解密）
+        PendingDecrypt,   // 等待解密
+        Completed,        // 已完成（已解密）
+        Expired           // 已过期
     }
 
-    // ✅ 新增：解密请求追踪结构
+    // ✅ 解密请求追踪结构（增强版）
     struct DecryptionRequest {
         uint256 pollId;        // 关联的投票ID
         address requester;     // 请求者地址
         uint256 timestamp;     // 请求时间
+        uint8 retryCount;      // ✅ 重试次数
         bool processed;        // 是否已处理
     }
 
@@ -40,7 +44,8 @@ contract SecretVoting is GatewayCaller {
 
     // 配置常量
     uint256 public constant CALLBACK_GAS_LIMIT = 500000;  // Gateway 回调 Gas 限制
-    uint256 public constant DECRYPTION_TIMEOUT = 1800;    // 解密超时时间（30分钟）
+    uint256 public constant DECRYPTION_TIMEOUT = 1800;    // 解密超时时间（30分钟，1800秒）
+    uint8 public constant MAX_RETRIES = 3;               // ✅ 最大重试次数
     
     // 状态变量
     uint256 public pollCount;
@@ -72,9 +77,22 @@ contract SecretVoting is GatewayCaller {
         uint32[] results
     );
     
-    // ✅ 新增：解密请求事件
+    // ✅ 解密请求事件
     event DecryptionRequested(
         uint256 indexed requestId,
+        uint256 indexed pollId,
+        uint256 timestamp
+    );
+    
+    // ✅ 新增：解密重试事件
+    event DecryptionRetrying(
+        uint256 indexed requestId,
+        uint256 indexed pollId,
+        uint8 retryCount
+    );
+    
+    // ✅ 新增：投票过期事件
+    event PollExpired(
         uint256 indexed pollId,
         uint256 timestamp
     );
@@ -200,15 +218,19 @@ contract SecretVoting is GatewayCaller {
             false
         );
         
-        // ✅ 新增：记录解密请求映射
+        // ✅ 记录解密请求映射
         decryptionRequests[requestId] = DecryptionRequest({
             pollId: _pollId,
             requester: msg.sender,
             timestamp: block.timestamp,
+            retryCount: 0,
             processed: false
         });
         
         pollToRequestId[_pollId] = requestId;
+        
+        // ✅ 更新状态为等待解密
+        poll.status = PollStatus.PendingDecrypt;
         
         emit DecryptionRequested(requestId, _pollId, block.timestamp);
     }
@@ -246,9 +268,86 @@ contract SecretVoting is GatewayCaller {
         }
         
         poll.resultsDecrypted = true;
+        poll.status = PollStatus.Completed;  // ✅ 更新状态为已完成
         request.processed = true;  // 标记请求已处理
 
         emit ResultsDecrypted(poll.id, poll.results);
+    }
+
+    /**
+     * @notice 重试解密请求（符合手册标准）
+     * @param _pollId 投票ID
+     * @return newRequestId 新的解密请求ID
+     */
+    function retryDecryption(uint256 _pollId) external returns (uint256 newRequestId) {
+        uint256 oldRequestId = pollToRequestId[_pollId];
+        DecryptionRequest storage request = decryptionRequests[oldRequestId];
+        Poll storage poll = polls[_pollId];
+        
+        require(poll.id != 0, "Poll does not exist");
+        require(poll.status == PollStatus.PendingDecrypt || poll.status == PollStatus.Ended, "Not retriable");
+        require(!request.processed, "Already processed");
+        require(request.retryCount < MAX_RETRIES, "Max retries exceeded");
+        require(
+            block.timestamp > request.timestamp + 5 minutes,  // 至少等待 5 分钟
+            "Too soon to retry"
+        );
+        
+        request.retryCount++;
+        emit DecryptionRetrying(oldRequestId, _pollId, request.retryCount);
+        
+        // 重新提交解密请求
+        uint256[] memory cts = new uint256[](poll.options.length);
+        for (uint256 i = 0; i < poll.options.length; i++) {
+            cts[i] = Gateway.toUint256(poll.encryptedVotes[i]);
+        }
+        
+        newRequestId = Gateway.requestDecryption(
+            cts,
+            this.callbackDecryption.selector,
+            CALLBACK_GAS_LIMIT,
+            block.timestamp + DECRYPTION_TIMEOUT,
+            false
+        );
+        
+        // 更新请求映射
+        decryptionRequests[newRequestId] = DecryptionRequest({
+            pollId: _pollId,
+            requester: msg.sender,
+            timestamp: block.timestamp,
+            retryCount: request.retryCount,
+            processed: false
+        });
+        
+        pollToRequestId[_pollId] = newRequestId;
+        
+        emit DecryptionRequested(newRequestId, _pollId, block.timestamp);
+        
+        return newRequestId;
+    }
+
+    /**
+     * @notice 取消过期投票（符合手册标准）
+     * @param _pollId 投票ID
+     */
+    function cancelExpiredPoll(uint256 _pollId) external {
+        Poll storage poll = polls[_pollId];
+        
+        require(poll.id != 0, "Poll does not exist");
+        require(
+            poll.status == PollStatus.PendingDecrypt || 
+            poll.status == PollStatus.Ended,
+            "Cannot cancel"
+        );
+        require(
+            block.timestamp > poll.endTime + DECRYPTION_TIMEOUT,
+            "Not expired yet"
+        );
+        
+        // 标记为过期
+        poll.status = PollStatus.Expired;
+        
+        emit PollExpired(_pollId, block.timestamp);
     }
 
     /**
@@ -308,6 +407,45 @@ contract SecretVoting is GatewayCaller {
             ids[i - 1] = i;
         }
         return ids;
+    }
+
+    /**
+     * @notice 应急处理函数（管理员/创建者使用，符合手册标准）
+     * @param _pollId 投票ID
+     * @param _results 手动提供的解密结果
+     * @dev 仅在解密请求超时且经过足够时间后允许使用
+     */
+    function emergencyResolve(
+        uint256 _pollId,
+        uint32[] memory _results
+    ) external {
+        Poll storage poll = polls[_pollId];
+        
+        require(poll.id != 0, "Poll does not exist");
+        require(
+            poll.status == PollStatus.PendingDecrypt || 
+            poll.status == PollStatus.Ended,
+            "Invalid state"
+        );
+        require(
+            msg.sender == poll.creator,
+            "Only creator can resolve"
+        );
+        require(
+            block.timestamp > poll.endTime + DECRYPTION_TIMEOUT + 24 hours,  // 至少等待 24 小时
+            "Too early for emergency"
+        );
+        require(_results.length == poll.options.length, "Invalid results length");
+        
+        // 更新结果
+        for (uint256 i = 0; i < _results.length && i < poll.results.length; i++) {
+            poll.results[i] = _results[i];
+        }
+        
+        poll.resultsDecrypted = true;
+        poll.status = PollStatus.Completed;
+        
+        emit ResultsDecrypted(poll.id, poll.results);
     }
 }
 

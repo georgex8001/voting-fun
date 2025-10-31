@@ -1,10 +1,14 @@
 import { ethers } from "ethers";
 import { createInstance } from "fhevmjs";
+import { CONTRACT_ADDRESSES, CONTRACT_ABI } from "../config/contracts";
+import { getNetworkConfig, getRpcUrl } from "../config/network";
 
+// ✅ 使用配置文件中的网络配置
+const networkConfig = getNetworkConfig();
 const SEPOLIA_FHE_CONFIG = {
-  chainId: 11155111,
-  networkUrl: "https://eth-sepolia.public.blastapi.io",
-  gatewayUrl: "https://gateway.sepolia.zama.ai",
+  chainId: networkConfig.chainId,
+  networkUrl: getRpcUrl(),
+  gatewayUrl: networkConfig.gatewayUrl,
   aclContractAddress: "0x687820221192C5B662b25367F70076A37bc79b6c",
 };
 
@@ -114,39 +118,21 @@ export function getFheStatus() {
   return fheStatus;
 }
 
-// 合约地址配置
-const CONTRACT_ADDRESSES = {
-  // FHE 加密合约（Gateway 在线时使用）- 升级后的新版本 ✅
-  fhe: "0xC6bb1eb417b4C0AC5D7E411d6b801608b1064811",  // 生产级解密系统（2025-10-29）
-  // Fallback 简化合约（Gateway 离线时自动切换）
-  fallback: "0x1032d41F45c22b7dA427f234A0F418c02DA0f3A0"  // SimpleVotingTest（明文投票）
-};
-
 // 🧱 获取合约实例（根据 FHE 状态自动切换）
 export async function getContract() {
   if (!window.ethereum) throw new Error("No wallet provider found");
   const provider = new ethers.BrowserProvider(window.ethereum);
   const signer = await provider.getSigner();
 
-  // 根据 Gateway 状态选择合约地址
+  // ✅ 使用配置文件中的合约地址
   const contractAddress = fheStatus === "up" 
     ? CONTRACT_ADDRESSES.fhe 
     : CONTRACT_ADDRESSES.fallback;
 
   console.log(`📍 使用合约: ${fheStatus === "up" ? "FHE 加密" : "Fallback 简化"} (${contractAddress})`);
 
-  // 简化的 ABI（两个合约都支持）
-  const abi = [
-    "function createPoll(string title, string[] options, uint256 duration) external returns (uint256)",
-    "function vote(uint256 pollId, uint256 optionIndex) external",
-    "function pollCount() external view returns (uint256)",
-    "function polls(uint256) external view returns (uint256 id, string title, address creator, uint256 endTime, bool isActive)",
-    "function getPollInfo(uint256 pollId) external view returns (uint256 id, string title, string[] options, address creator, uint256 endTime, bool isActive)",
-    "function getResults(uint256 pollId) external view returns (uint256[] memory)",
-    "function hasVoted(uint256 pollId, address voter) external view returns (bool)",
-  ];
-
-  return new ethers.Contract(contractAddress, abi, signer);
+  // ✅ 使用配置文件中的 ABI
+  return new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
 }
 
 // 🧮 创建投票（自动检测 FHE 可用性）

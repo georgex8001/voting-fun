@@ -72,3 +72,6 @@ Write-Host "3. git commit -m '🎉 Initial commit: Voting-Fun'"
 Write-Host "4. git remote add origin https://github.com/YOUR_USERNAME/voting-fun.git"
 Write-Host "5. git push -u origin main"
 
+
+
+
