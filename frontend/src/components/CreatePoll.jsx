@@ -8,6 +8,7 @@ function CreatePoll({ onSuccess }) {
   const [options, setOptions] = useState(['', ''])
   const [duration, setDuration] = useState(24)
   const [loading, setLoading] = useState(false)
+  const [progressMessage, setProgressMessage] = useState('')
 
   const handleAddOption = () => {
     if (options.length < 10) {
@@ -43,11 +44,17 @@ function CreatePoll({ onSuccess }) {
 
     try {
       setLoading(true)
-      const receipt = await createPoll(title, validOptions, duration)
+      setProgressMessage('')
       
-      // 等待区块确认（Fallback模式需要更长时间）
+      // ✅ 使用带进度回调的 createPoll（符合手册第3.5节）
+      const receipt = await createPoll(title, validOptions, duration, (progress) => {
+        setProgressMessage(progress.message)
+        console.log(`[${progress.step}] ${progress.message} - ${progress.progress}%`)
+      })
+      
+      // 等待区块确认
       console.log('✅ Poll created successfully!')
-      console.log('⏳ Waiting for blockchain confirmation (5 seconds)...')
+      setProgressMessage('✅ Poll created successfully!')
       
       // 增加等待时间到5秒，确保区块完全确认
       await new Promise(resolve => setTimeout(resolve, 5000))
@@ -58,13 +65,15 @@ function CreatePoll({ onSuccess }) {
       setTitle('')
       setOptions(['', ''])
       setDuration(24)
+      setProgressMessage('')
       
       if (onSuccess) {
         onSuccess()
       }
     } catch (error) {
       console.error('❌ Create poll error:', error)
-      alert('Failed to create poll. Please try again.')
+      setProgressMessage('❌ Failed to create poll: ' + error.message)
+      alert('Failed to create poll: ' + error.message)
     } finally {
       setLoading(false)
     }
@@ -153,13 +162,26 @@ function CreatePoll({ onSuccess }) {
             </p>
           </div>
 
+          {/* Progress Message */}
+          {progressMessage && (
+            <div className={`p-3 rounded-lg text-sm ${
+              progressMessage.startsWith('✅') 
+                ? 'bg-green-50 text-green-700' 
+                : progressMessage.startsWith('❌')
+                ? 'bg-red-50 text-red-700'
+                : 'bg-blue-50 text-blue-700'
+            }`}>
+              {progressMessage}
+            </div>
+          )}
+
           {/* Submit Button */}
           <button
             type="submit"
             disabled={loading}
             className={`btn-primary w-full ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
           >
-            {loading ? 'Creating...' : 'Create Poll'}
+            {loading ? (progressMessage || 'Creating...') : 'Create Poll'}
           </button>
         </form>
 

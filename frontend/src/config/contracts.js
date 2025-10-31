@@ -14,8 +14,12 @@ export const CONTRACT_ADDRESSES = {
 
 // 合约 ABI（简化版，两个合约都支持）
 export const CONTRACT_ABI = [
+  // Fallback 版本（明文）
   "function createPoll(string title, string[] options, uint256 duration) external returns (uint256)",
   "function vote(uint256 pollId, uint256 optionIndex) external",
+  // FHE 版本（加密参数）✅ 符合手册第3.5节
+  "function createPoll(string title, string[] options, uint256 duration, bytes32[] encryptedZeros, bytes[] inputProofs) external returns (uint256)",
+  "function vote(uint256 pollId, bytes32 encryptedOption, bytes inputProof) external",
   "function pollCount() external view returns (uint256)",
   "function polls(uint256) external view returns (uint256 id, string title, address creator, uint256 endTime, bool isActive)",
   "function getPollInfo(uint256 pollId) external view returns (uint256 id, string title, string[] options, address creator, uint256 endTime, bool isActive)",

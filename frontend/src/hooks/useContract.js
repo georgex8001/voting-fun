@@ -2,6 +2,7 @@ import { ethers } from "ethers";
 import { createInstance } from "fhevmjs";
 import { CONTRACT_ADDRESSES, CONTRACT_ABI } from "../config/contracts";
 import { getNetworkConfig, getRpcUrl } from "../config/network";
+import { createEncryptedZeros, createEncryptedOptionIndex } from "../utils/fheEncryption";
 
 // ✅ 使用配置文件中的网络配置
 const networkConfig = getNetworkConfig();
@@ -135,17 +136,77 @@ export async function getContract() {
   return new ethers.Contract(contractAddress, CONTRACT_ABI, signer);
 }
 
-// 🧮 创建投票（自动检测 FHE 可用性）
-export async function createPoll(title, options, durationInHours) {
+// 🧮 创建投票（自动检测 FHE 可用性，符合手册第3.5节）
+export async function createPoll(title, options, durationInHours, onProgress = null) {
   const contract = await getContract();
   const duration = durationInHours * 3600;
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+  const signerAddress = await signer.getAddress();
+  const contractAddress = contract.target || contract.address;
 
-  if (fhevmInstance === null) {
-    console.log("⚙️ FHEVM 不可用，使用 fallback（纯 EVM 调用）");
-  } else {
+  // ✅ FHE 模式：先加密，再创建（符合手册标准）
+  if (fheStatus === "up" && fhevmInstance !== null) {
     console.log("🔒 使用 FHE 加密路径（SDK 已初始化）");
-    // 👉 如果需要，这里可以集成加密输入
+    
+    try {
+      // 1. 显示加密进度
+      if (onProgress) {
+        onProgress({ step: 'encrypting', message: '🔐 Encrypting initial values...', progress: 10 });
+      }
+
+      // 2. ✅ 创建加密的零值（符合手册第3.5节）
+      const { encryptedInputs, inputProofs } = await createEncryptedZeros(
+        contractAddress,
+        signerAddress,
+        options.length
+      );
+
+      if (onProgress) {
+        onProgress({ step: 'creating', message: '📝 Creating poll on blockchain...', progress: 50 });
+      }
+
+      console.log('✅ 加密完成，开始创建投票');
+      console.log(`加密输入数量: ${encryptedInputs.length}`);
+      console.log(`证明数量: ${inputProofs.length}`);
+
+      // 3. 调用 FHE 合约（带加密参数）
+      const tx = await contract.createPoll(
+        title,
+        options,
+        duration,
+        encryptedInputs,  // einput[]
+        inputProofs       // bytes[]
+      );
+
+      if (onProgress) {
+        onProgress({ step: 'confirming', message: '⏳ Waiting for confirmation...', progress: 80 });
+      }
+
+      console.log("📤 Transaction sent:", tx.hash);
+      const receipt = await tx.wait();
+      console.log("✅ Poll created:", receipt.hash);
+
+      if (onProgress) {
+        onProgress({ step: 'complete', message: '✅ Poll created successfully!', progress: 100 });
+      }
+
+      return receipt;
+    } catch (err) {
+      console.error("❌ 创建投票失败:", err);
+      
+      // 如果加密失败，尝试降级到 Fallback 模式
+      if (err.message.includes('createEncryptedInput') || err.message.includes('encrypt')) {
+        console.warn("⚠️ 加密失败，降级到 Fallback 模式");
+        // 继续执行 Fallback 逻辑
+      } else {
+        throw err;
+      }
+    }
   }
+
+  // Fallback 模式：直接调用（明文）
+  console.log("⚙️ FHEVM 不可用，使用 fallback（纯 EVM 调用）");
 
   try {
     const tx = await contract.createPoll(title, options, duration);
@@ -159,16 +220,72 @@ export async function createPoll(title, options, durationInHours) {
   }
 }
 
-// 🗳️ 投票（自动检测 FHE 可用性）
-export async function vote(pollId, optionIndex) {
+// 🗳️ 投票（自动检测 FHE 可用性，符合手册第3.5节）
+export async function vote(pollId, optionIndex, onProgress = null) {
   const contract = await getContract();
+  const provider = new ethers.BrowserProvider(window.ethereum);
+  const signer = await provider.getSigner();
+  const signerAddress = await signer.getAddress();
+  const contractAddress = contract.target || contract.address;
 
-  if (fhevmInstance === null) {
-    console.log("⚙️ FHEVM 不可用，使用 fallback（明文投票）");
-  } else {
+  // ✅ FHE 模式：先加密选项索引，再投票（符合手册标准）
+  if (fheStatus === "up" && fhevmInstance !== null) {
     console.log("🔒 使用 FHE 加密投票");
-    // 👉 如果需要，这里可以集成加密投票
+
+    try {
+      // 1. 显示加密进度
+      if (onProgress) {
+        onProgress({ step: 'encrypting', message: '🔐 Encrypting vote...', progress: 20 });
+      }
+
+      // 2. ✅ 创建加密的选项索引（符合手册第3.5节）
+      const { encryptedInput, inputProof } = await createEncryptedOptionIndex(
+        contractAddress,
+        signerAddress,
+        optionIndex
+      );
+
+      if (onProgress) {
+        onProgress({ step: 'submitting', message: '📤 Submitting encrypted vote...', progress: 60 });
+      }
+
+      console.log('✅ 选项索引加密完成');
+
+      // 3. 调用 FHE 合约（带加密参数）
+      const tx = await contract.vote(
+        pollId,
+        encryptedInput,  // einput
+        inputProof       // bytes
+      );
+
+      if (onProgress) {
+        onProgress({ step: 'confirming', message: '⏳ Waiting for confirmation...', progress: 80 });
+      }
+
+      console.log("📤 Transaction sent:", tx.hash);
+      const receipt = await tx.wait();
+      console.log("✅ Vote submitted:", receipt.hash);
+
+      if (onProgress) {
+        onProgress({ step: 'complete', message: '✅ Vote submitted successfully!', progress: 100 });
+      }
+
+      return receipt;
+    } catch (err) {
+      console.error("❌ 加密投票失败:", err);
+      
+      // 如果加密失败，尝试降级到 Fallback 模式
+      if (err.message.includes('createEncryptedInput') || err.message.includes('encrypt')) {
+        console.warn("⚠️ 加密失败，降级到 Fallback 模式");
+        // 继续执行 Fallback 逻辑
+      } else {
+        throw err;
+      }
+    }
   }
+
+  // Fallback 模式：直接调用（明文）
+  console.log("⚙️ FHEVM 不可用，使用 fallback（明文投票）");
 
   try {
     const tx = await contract.vote(pollId, optionIndex);

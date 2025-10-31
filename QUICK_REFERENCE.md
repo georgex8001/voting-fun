@@ -270,3 +270,4 @@ const hasVoted = await contract.hasVoted(pollId, account);
 
 
 
+
