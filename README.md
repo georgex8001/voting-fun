@@ -224,7 +224,6 @@ This project participates in **Zama Developer Program**:
 ## 📚 Documentation
 
 - [NETLIFY_DEPLOY_GUIDE.md](./NETLIFY_DEPLOY_GUIDE.md) - Netlify deployment guide
-- [GITHUB_REPO_CLEANUP_SUMMARY.md](./GITHUB_REPO_CLEANUP_SUMMARY.md) - Repository cleanup summary
 
 ## 🎓 Learning Resources
 
