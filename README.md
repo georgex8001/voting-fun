@@ -223,12 +223,8 @@ This project participates in **Zama Developer Program**:
 
 ## 📚 Documentation
 
-- [TUTORIAL.md](./TUTORIAL.md) - FHEVM development tutorial
-- [DEPLOYMENT_GUIDE.md](./DEPLOYMENT_GUIDE.md) - Deployment guide
-- [USAGE_GUIDE.md](./USAGE_GUIDE.md) - Usage instructions
-- [SUBMISSION_GUIDE.md](./SUBMISSION_GUIDE.md) - Competition submission guide
-- [NETLIFY_DEPLOY_GUIDE.md](./NETLIFY_DEPLOY_GUIDE.md) - Netlify deployment
-- [ZAMA_PROJECT_LESSONS_LEARNED.md](./ZAMA_PROJECT_LESSONS_LEARNED.md) - Technical insights
+- [NETLIFY_DEPLOY_GUIDE.md](./NETLIFY_DEPLOY_GUIDE.md) - Netlify deployment guide
+- [GITHUB_REPO_CLEANUP_SUMMARY.md](./GITHUB_REPO_CLEANUP_SUMMARY.md) - Repository cleanup summary
 
 ## 🎓 Learning Resources
 
